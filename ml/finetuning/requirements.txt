@@ -1,0 +1,22 @@
+# LoRA Fine-tuning Dependencies for Yield Prediction Model
+# Python 3.10+ recommended
+# GPU Required: CUDA 11.8+ with 16GB+ VRAM (RTX 3090, A100, etc.)
+
+# Core ML Libraries
+torch>=2.1.0
+transformers>=4.36.0
+datasets>=2.15.0
+
+# LoRA and Quantization
+peft>=0.7.0
+bitsandbytes>=0.41.0
+accelerate>=0.25.0
+
+# Training
+trl>=0.7.0
+scipy>=1.11.0
+sentencepiece>=0.1.99
+
+# Utilities
+pyyaml>=6.0
+tqdm>=4.66.0
