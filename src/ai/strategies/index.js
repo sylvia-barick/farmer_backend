@@ -5,4 +5,5 @@ module.exports = {
     disease: require('./disease.strategy'),
     chat: require('./chat.strategy'),
     'farm-summary': require('./farmSummary.strategy'),
+    'policy-summary': require('./policySummary.strategy'),
 };

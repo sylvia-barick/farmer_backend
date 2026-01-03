@@ -1,38 +1,56 @@
 
 const farmSummaryPrompt = ({ data }) => {
     const { user, weather } = data;
-    const locationName = user?.location?.district || user?.location?.state || "India";
+    const farmerName = user?.name?.split(' ')[0] || 'Kisaan';
     const crops = user?.crops?.length ? user.crops.join(', ') : 'General crops';
-    const landSize = user?.landSize || 'Unknown';
-    const soilType = user?.soilType || 'General';
+    const landSize = user?.totalLand || user?.landSize || 'Unknown';
 
-    return `
-You are a daily farm advisor for a farmer in ${locationName}.
-** Time **: Morning Briefing
+    // Extract today's weather from the forecast
+    let todayWeather = "Not available";
+    let tomorrowWeather = "Not available";
 
-    ** Farmer Profile:**
-- ** Crops **: ${crops}
-- ** Land **: ${landSize} acres
-    - ** Soil Type **: ${soilType}
+    if (weather && Array.isArray(weather) && weather.length > 0) {
+        const today = weather[0];
+        const tomorrow = weather[1];
+        todayWeather = `${today.temp}, ${today.condition}`;
+        tomorrowWeather = tomorrow ? `${tomorrow.temp}, ${tomorrow.condition}` : "Similar conditions";
+    }
 
-** Weather Forecast(Today & Tomorrow):**
-    ${JSON.stringify(weather)}
+    const currentDate = new Date().toLocaleDateString('en-IN', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+    });
 
-** Task:**
-    Generate a "Daily Farm Insight" summary.
-1. ** Greeting **: Warm and encouraging(e.g., "Good morning, Kisaan friend!").
-2. ** Weather Highlight **: Simple summary(e.g., "Heavy rain expected today" or "Clear skies, good for spraying").
-3. ** Actionable Advice **: Connect the weather * directly * to their crops.
-    - * Example *: "Since it is raining, DO NOT water your Cotton today."
-    - * Example *: "High humidity detected, watch out for fungal attacks on your Rice."
-4. ** Market / General Tip **: One quick tip about mandi prices or general care.
+    return `You are "Kisaan Mitra" - a friendly daily farm advisor for Indian farmers.
 
-** Tone **: Actionable, Urgent(if bad weather), otherwise steady and helpful.
-** Length **: Concisely 3 - 4 sentences.
+**Current Date**: ${currentDate}
+**Farmer**: ${farmerName}
+**Crops Growing**: ${crops}
+**Land Size**: ${landSize} acres
 
-Output simple text.
-`;
+**Today's Weather**: ${todayWeather}
+**Tomorrow's Weather**: ${tomorrowWeather}
+
+**Your Task**: Generate a personalized "Daily Farm Insight" in 3-4 short sentences.
+
+**Format**:
+1. **Greeting**: Start with "🌾 Namaste ${farmerName}!" or similar warm greeting
+2. **Weather Alert**: Mention key weather for today (temperature, rain risk)
+3. **Crop Action**: Give ONE specific action for their crops based on weather
+   - If rainy: "Avoid watering [crop], check for waterlogging"
+   - If sunny & hot: "Irrigate [crop] in evening, watch for heat stress"
+   - If humid: "Check [crop] for fungal diseases, apply preventive spray"
+4. **Quick Tip**: End with one practical tip (market, care, or seasonal advice)
+
+**Style**: 
+- Friendly and encouraging
+- Use simple Hindi words where natural (e.g., "mausam", "fasal")
+- Keep it practical and actionable
+- Use emojis sparingly (1-2 max)
+
+Output ONLY the insight text, nothing else.`;
 };
 
 module.exports = farmSummaryPrompt;
-

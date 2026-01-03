@@ -8,20 +8,22 @@ import { dbTool } from "../tools/db.tool";
 const checkEligibilityStep = createStep({
     id: "check-loan-eligibility",
     inputSchema: z.object({
+        farmerUid: z.string(),
         farmerName: z.string(),
         farmLocation: z.object({
-            lat: z.number(),
-            lng: z.number()
+            lat: z.coerce.number(),
+            lng: z.coerce.number()
         }).optional(),
         cropType: z.string(),
-        acres: z.number().describe("Land size in acres"),
+        acres: z.coerce.number().describe("Land size in acres"),
         loanPurpose: z.string().describe("Purpose of the loan (e.g., seeds, equipment)"),
-        requestedAmount: z.number().describe("Amount requested by farmer"),
-        tenureMonths: z.number(),
+        requestedAmount: z.coerce.number().describe("Amount requested by farmer"),
+        tenureMonths: z.coerce.number(),
     }),
     outputSchema: z.object({
         eligibility: loanEligibilityTool.outputSchema,
         loanData: z.object({
+            farmerUid: z.string(),
             farmerName: z.string(),
             farmLocation: z.object({
                 lat: z.number(),
@@ -37,6 +39,7 @@ const checkEligibilityStep = createStep({
     execute: async ({ inputData }) => {
         const eligibility = await loanEligibilityTool.execute({
             context: {
+                farmerUid: inputData.farmerUid,
                 farmerName: inputData.farmerName,
                 farmLocation: inputData.farmLocation,
                 cropType: inputData.cropType,
@@ -50,6 +53,7 @@ const checkEligibilityStep = createStep({
         return {
             eligibility,
             loanData: {
+                farmerUid: inputData.farmerUid,
                 farmerName: inputData.farmerName,
                 farmLocation: inputData.farmLocation,
                 cropType: inputData.cropType,
@@ -69,6 +73,7 @@ const persistLoanApplicationStep = createStep({
     inputSchema: z.object({
         eligibility: loanEligibilityTool.outputSchema,
         loanData: z.object({
+            farmerUid: z.string(),
             farmerName: z.string(),
             farmLocation: z.object({
                 lat: z.number(),
@@ -101,6 +106,7 @@ const persistLoanApplicationStep = createStep({
             context: {
                 collection: "loanApplication",
                 data: {
+                    farmerUid: loanData.farmerUid,
                     farmerName: loanData.farmerName,
                     farmLocation: loanData.farmLocation,
                     cropType: loanData.cropType,
@@ -159,16 +165,17 @@ const formatResponseStep = createStep({
 export const loanWorkflow = createWorkflow({
     id: "loan-eligibility-workflow",
     inputSchema: z.object({
+        farmerUid: z.string(),
         farmerName: z.string(),
         farmLocation: z.object({
-            lat: z.number(),
-            lng: z.number()
+            lat: z.coerce.number(),
+            lng: z.coerce.number()
         }).optional(),
         cropType: z.string(),
-        acres: z.number(),
+        acres: z.coerce.number(),
         loanPurpose: z.string(),
-        requestedAmount: z.number(),
-        tenureMonths: z.number(),
+        requestedAmount: z.coerce.number(),
+        tenureMonths: z.coerce.number(),
     }),
     outputSchema: z.object({
         message: z.string(),

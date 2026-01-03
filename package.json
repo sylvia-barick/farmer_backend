@@ -6,6 +6,7 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node src/app.js",
     "dev": "nodemon src/app.js",
+    "mcp": "node src/mcp_server.js",
     "seed": "node src/scripts/seed.js"
   },
   "repository": {
@@ -25,9 +26,11 @@
     "@modelcontextprotocol/sdk": "^1.25.1",
     "axios": "^1.13.2",
     "cors": "^2.8.5",
+    "ethers": "^5.7.2",
     "express": "^5.2.1",
     "express-rate-limit": "^8.2.1",
     "firebase-admin": "^13.6.0",
+    "google-tts-api": "^2.0.2",
     "groq-sdk": "^0.37.0",
     "mongodb": "^7.0.0",
     "morgan": "^1.10.1",

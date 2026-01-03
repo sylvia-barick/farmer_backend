@@ -1,8 +1,8 @@
 const mongoose = require('mongoose');
-const insuranceClaimSchema = new mongoose.Schema({
+
+const InsuranceClaimSchema = new mongoose.Schema({
     userId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'User',
+        type: String,
         required: true,
         index: true
     },
@@ -10,45 +10,22 @@ const insuranceClaimSchema = new mongoose.Schema({
         type: String,
         required: true
     },
-    diseaseReportId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'DiseaseReport'
-    },
-    documents: [{
-        type: {
-            type: String,
-            enum: ['aadhaar', 'land_record', 'photo', 'other'],
-            required: true
-        },
-        url: {
-            type: String,
-            required: true
-        },
-        uploadedAt: {
-            type: Date,
-            default: Date.now
-        }
-    }],
     uin: String,
     policyNumber: String,
     authenticityScore: Number,
     damageConfidence: Number,
     damagePrediction: String,
-    claimAmount: String,
     status: {
         type: String,
-        enum: ['draft', 'ready', 'submitted'],
-        default: 'draft'
+        default: 'Under Review',
+        enum: ['Under Review', 'Approved', 'Rejected']
     },
-    completenessCheck: {
-        hasAadhaar: { type: Boolean, default: false },
-        hasLandRecord: { type: Boolean, default: false },
-        hasPhoto: { type: Boolean, default: false }
-    },
-    createdAt: {
+    aiReasoning: String, // AI's explanation for the decision
+    claimAmount: String, // Optional, can be added later
+    submissionDate: {
         type: Date,
         default: Date.now
     }
-});
+}, { timestamps: true });
 
-module.exports = mongoose.model('InsuranceClaim', insuranceClaimSchema);
+module.exports = mongoose.model('InsuranceClaim', InsuranceClaimSchema);

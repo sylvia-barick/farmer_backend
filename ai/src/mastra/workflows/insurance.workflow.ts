@@ -8,9 +8,9 @@ import { dbTool } from "../tools/db.tool";
 const getInsuranceGuidanceStep = createStep({
     id: "get-insurance-guidance",
     inputSchema: z.object({
-        disease: z.string(),
-        severity: z.enum(["low", "medium", "high"]),
-        crop: z.string(),
+        disease: z.string().optional(),
+        severity: z.enum(["low", "medium", "high"]).optional(),
+        crop: z.string().optional(),
         provider: z.string(),
         uin: z.string().optional(),
         policyNumber: z.string().optional(),
@@ -21,17 +21,17 @@ const getInsuranceGuidanceStep = createStep({
             provider: z.string(),
             uin: z.string().optional(),
             policyNumber: z.string().optional(),
-            disease: z.string(),
-            severity: z.string(),
-            crop: z.string(),
+            disease: z.string().optional(),
+            severity: z.string().optional(),
+            crop: z.string().optional(),
         }),
     }),
     execute: async ({ inputData }) => {
         const guidance = await insuranceGuideTool.execute({
             context: {
-                disease: inputData.disease,
-                severity: inputData.severity,
-                crop: inputData.crop,
+                disease: inputData.disease || "Unknown",
+                severity: inputData.severity || "medium",
+                crop: inputData.crop || "General Crop",
             },
         } as any);
 

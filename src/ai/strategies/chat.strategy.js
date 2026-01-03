@@ -9,7 +9,7 @@ module.exports = {
 
         return {
             prompt: promptFn({ data, userPrompt, context: contextText }),
-            model: "llama-3.2-11b-vision-preview", // Chat model
+            model: "meta-llama/llama-4-maverick-17b-128e-instruct", // User Preferred Model
             responseParams: { json: false }
         };
     }

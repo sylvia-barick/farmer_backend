@@ -4,7 +4,7 @@ module.exports = {
     execute: async (data) => {
         return {
             prompt: promptFn({ data }),
-            model: "llama-3.1-8b-instant", // Fast/Standard model
+            model: "meta-llama/llama-4-maverick-17b-128e-instruct", // User preferred model
             responseParams: { json: false }
         };
     }

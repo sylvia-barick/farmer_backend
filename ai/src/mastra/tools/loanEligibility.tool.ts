@@ -8,14 +8,14 @@ export const loanEligibilityTool = createTool({
         farmerUid: z.string().describe("Farmer's user ID"),
         farmerName: z.string().describe("Farmer's full name"),
         farmLocation: z.object({
-            lat: z.number(),
-            lng: z.number()
+            lat: z.coerce.number(),
+            lng: z.coerce.number()
         }).optional().describe("Farm GPS coordinates"),
         cropType: z.string().describe("Type of crop being cultivated"),
-        acres: z.number().describe("Land size in acres"),
+        acres: z.coerce.number().describe("Land size in acres"),
         loanPurpose: z.string().describe("Purpose of the loan (e.g., seeds, equipment)"),
-        requestedAmount: z.number().describe("Amount requested by farmer"),
-        tenureMonths: z.number().describe("Loan repayment period in months")
+        requestedAmount: z.coerce.number().describe("Amount requested by farmer"),
+        tenureMonths: z.coerce.number().describe("Loan repayment period in months")
     }),
     outputSchema: z.object({
         eligible: z.boolean(),

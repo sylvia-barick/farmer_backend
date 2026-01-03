@@ -2,14 +2,14 @@ const mongoose = require('mongoose');
 
 const LoanApplicationSchema = new mongoose.Schema({
     farmerUid: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'User',
+        type: String, // Changed from ObjectId to String to match Frontend payload
         required: true,
         index: true
     },
     farmerName: {
         type: String,
-        required: true
+        required: false,
+        default: 'Farmer'
     },
     farmLocation: {
         lat: Number,
@@ -17,15 +17,18 @@ const LoanApplicationSchema = new mongoose.Schema({
     },
     cropType: {
         type: String,
-        required: true
+        required: false,
+        default: 'General'
     },
     acres: {
         type: Number,
-        required: true
+        required: false,
+        default: 5
     },
     loanPurpose: {
         type: String,
-        required: true
+        required: false,
+        default: 'Agriculture'
     },
     requestedAmount: {
         type: Number,
@@ -33,7 +36,8 @@ const LoanApplicationSchema = new mongoose.Schema({
     },
     tenureMonths: {
         type: Number,
-        required: true
+        required: false,
+        default: 12
     },
     status: {
         type: String,
@@ -41,12 +45,12 @@ const LoanApplicationSchema = new mongoose.Schema({
         default: 'PENDING'
     },
     aiAssessment: {
-        type: Object, // To store the AI JSON response later
+        type: Object,
         default: null
     },
     fraudRiskScore: {
         type: Number,
-        default: 0 // 0-100 (0 = Safe, 100 = Fraud)
+        default: 0
     },
     blockchainTxHash: {
         type: String,
@@ -55,6 +59,14 @@ const LoanApplicationSchema = new mongoose.Schema({
     smartContractAddress: {
         type: String,
         default: null
+    },
+    tokenId: {
+        type: String,
+        default: null
+    },
+    disbursedAmount: {
+        type: Number,
+        default: 0
     },
     createdAt: {
         type: Date,

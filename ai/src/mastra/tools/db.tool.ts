@@ -35,7 +35,20 @@ export const dbTool = createTool({
                 throw new Error(`Unknown collection: ${collection}. Available: ${Object.keys(endpointMap).join(', ')}`);
             }
 
-            const response = await axios.post(`${backendUrl}${endpoint}`, data);
+            // Map fields if necessary (Example: user maps loanAmount -> requestedAmount)
+            let payload = { ...data };
+            if (collection === 'loanApplication') {
+                if (payload.loanAmount && !payload.requestedAmount) {
+                    payload.requestedAmount = payload.loanAmount;
+                }
+                if (payload.landSize && !payload.acres) {
+                    payload.acres = payload.landSize;
+                }
+                // Ensure required fields
+                payload.status = payload.status || 'PENDING';
+            }
+
+            const response = await axios.post(`${backendUrl}${endpoint}`, payload);
 
             return {
                 success: true,

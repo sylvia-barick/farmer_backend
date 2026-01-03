@@ -37,10 +37,11 @@ const getGroqAnalysis = async (prompt, modelName = "llama-3.1-8b-instant", image
             messages: messages,
             model: modelToUse,
             temperature: 1,
-            max_completion_tokens: 1024,
+            max_completion_tokens: modelToUse === "openai/gpt-oss-120b" ? 8192 : 1024,
             top_p: 1,
             stream: false,
-            stop: null
+            stop: null,
+            ...(modelToUse === "openai/gpt-oss-120b" && { reasoning_effort: "medium" })
         });
 
         return chatCompletion.choices[0]?.message?.content || "";
