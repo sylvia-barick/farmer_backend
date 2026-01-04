@@ -47,4 +47,34 @@ const getSatelliteImagery = async (req, res) => {
     }
 };
 
-module.exports = { getFarms, createFarm, getSatelliteImagery };
+/**
+ * Get crop health analysis from satellite imagery
+ * Returns NDVI-based health metrics for the farm location
+ */
+const getCropHealth = async (req, res) => {
+    const { lat, lon, crops } = req.query;
+    try {
+        if (!lat || !lon) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Latitude and longitude are required' 
+            });
+        }
+
+        // Parse crops if provided as comma-separated string
+        const cropList = crops ? crops.split(',').map(c => c.trim()) : [];
+        
+        const healthData = await planetService.getCropHealthAnalysis(
+            parseFloat(lat), 
+            parseFloat(lon), 
+            cropList
+        );
+        
+        res.json({ success: true, data: healthData });
+    } catch (error) {
+        console.error('Crop health error:', error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+module.exports = { getFarms, createFarm, getSatelliteImagery, getCropHealth };

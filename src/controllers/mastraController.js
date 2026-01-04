@@ -924,79 +924,82 @@ const chatWithAgent = async (req, res) => {
         console.log(`[Chat] User: ${userId}, Lang: ${preferredLang}, Message: ${message.substring(0, 50)}...`);
 
         // PRIMARY: Use multilingual chat (fast, reliable, language-aware)
-        if (!useMastra) {
-            console.log(`[Chat] Using multilingual chat (primary mode)`);
-            const response = await multilingualChat(message, userId, conversationThreadId, preferredLang);
+        // Always use Groq-based multilingual chat - Mastra integration disabled
+        console.log(`[Chat] Using multilingual chat (primary mode)`);
+        const response = await multilingualChat(message, userId, conversationThreadId, preferredLang);
+        
+        return res.json({
+            success: true,
+            response: response,
+            threadId: conversationThreadId,
+            language: preferredLang,
+            timestamp: new Date().toISOString()
+        });
+
+        /* MASTRA INTEGRATION DISABLED - Uncomment below to re-enable
+        // SECONDARY: Use Mastra agent for complex workflows (when explicitly requested)
+        if (useMastra) {
+            console.log(`[Chat] Using Mastra agent (advanced mode)`);
             
+            // Validate that threadId matches userId to prevent thread mismatch errors
+            if (threadId) {
+                const threadUserId = threadId.split('-')[1];
+                if (threadUserId !== userId) {
+                    console.log(`[Mastra Chat] Thread mismatch detected. Creating new thread.`);
+                    conversationThreadId = `farmer-${userId}-${Date.now()}`;
+                }
+            }
+
+            // Use request queue to prevent rate limiting
+            const mastraResponse = await requestQueue.execute(async () => {
+                return await axios.post(`${MASTRA_SERVER_URL}/api/agents/farmerAssistantAgent/generate`, {
+                    messages: [
+                        {
+                            role: 'system',
+                            content: `Current user's Firebase UID is: ${userId}. Use this as the userId when calling tools that require it. Respond in ${preferredLang === 'hi' ? 'Hindi (Devanagari)' : preferredLang === 'en' ? 'English' : 'Hinglish (Roman Hindi)'}.`
+                        },
+                        {
+                            role: 'user',
+                            content: message
+                        }
+                    ],
+                    threadId: conversationThreadId,
+                    resourceId: userId
+                }, {
+                    timeout: 90000,
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+            }, 5);
+
+            // Extract the text response
+            let agentResponse = mastraResponse.data?.text || mastraResponse.data?.message || mastraResponse.data?.response || 'I apologize, but I could not process your request at this time.';
+
+            // Clean up response - remove any tool call syntax that leaked through
+            agentResponse = agentResponse.replace(/<function=[^>]+>.*?<function>/gs, '');
+            agentResponse = agentResponse.replace(/<function[^>]*>/g, '');
+            agentResponse = agentResponse.replace(/{"farmerName":[^}]+}/g, '');
+            agentResponse = agentResponse.replace(/\b(loanWorkflowTool|dbTool|weatherTool|plantDiseaseTool|insuranceGuideTool|cropAdvisoryTool|govtSchemeTool|loanEligibilityTool)\s*\{[^}]*\}/g, '');
+            agentResponse = agentResponse.replace(/\{["\']?(userId|message|success|cropType)["\']?\s*:/g, '');
+            agentResponse = agentResponse.replace(/\n{3,}/g, '\n\n');
+            agentResponse = agentResponse.trim();
+            
+            if (!agentResponse) {
+                agentResponse = 'Processing your request...';
+            }
+
+            console.log(`[Mastra Chat] Response generated for user ${userId}`);
+
             return res.json({
                 success: true,
-                response: response,
+                response: agentResponse,
                 threadId: conversationThreadId,
                 language: preferredLang,
                 timestamp: new Date().toISOString()
             });
         }
-
-        // SECONDARY: Use Mastra agent for complex workflows (when explicitly requested)
-        console.log(`[Chat] Using Mastra agent (advanced mode)`);
-        
-        // Validate that threadId matches userId to prevent thread mismatch errors
-        if (threadId) {
-            const threadUserId = threadId.split('-')[1];
-            if (threadUserId !== userId) {
-                console.log(`[Mastra Chat] Thread mismatch detected. Creating new thread.`);
-                conversationThreadId = `farmer-${userId}-${Date.now()}`;
-            }
-        }
-
-        // Use request queue to prevent rate limiting
-        const mastraResponse = await requestQueue.execute(async () => {
-            return await axios.post(`${MASTRA_SERVER_URL}/api/agents/farmerAssistantAgent/generate`, {
-                messages: [
-                    {
-                        role: 'system',
-                        content: `Current user's Firebase UID is: ${userId}. Use this as the userId when calling tools that require it. Respond in ${preferredLang === 'hi' ? 'Hindi (Devanagari)' : preferredLang === 'en' ? 'English' : 'Hinglish (Roman Hindi)'}.`
-                    },
-                    {
-                        role: 'user',
-                        content: message
-                    }
-                ],
-                threadId: conversationThreadId,
-                resourceId: userId
-            }, {
-                timeout: 90000,
-                headers: {
-                    'Content-Type': 'application/json'
-                }
-            });
-        }, 5);
-
-        // Extract the text response
-        let agentResponse = mastraResponse.data?.text || mastraResponse.data?.message || mastraResponse.data?.response || 'I apologize, but I could not process your request at this time.';
-
-        // Clean up response - remove any tool call syntax that leaked through
-        agentResponse = agentResponse.replace(/<function=[^>]+>.*?<function>/gs, '');
-        agentResponse = agentResponse.replace(/<function[^>]*>/g, '');
-        agentResponse = agentResponse.replace(/{"farmerName":[^}]+}/g, '');
-        agentResponse = agentResponse.replace(/\b(loanWorkflowTool|dbTool|weatherTool|plantDiseaseTool|insuranceGuideTool|cropAdvisoryTool|govtSchemeTool|loanEligibilityTool)\s*\{[^}]*\}/g, '');
-        agentResponse = agentResponse.replace(/\{["\']?(userId|message|success|cropType)["\']?\s*:/g, '');
-        agentResponse = agentResponse.replace(/\n{3,}/g, '\n\n');
-        agentResponse = agentResponse.trim();
-        
-        if (!agentResponse) {
-            agentResponse = 'Processing your request...';
-        }
-
-        console.log(`[Mastra Chat] Response generated for user ${userId}`);
-
-        return res.json({
-            success: true,
-            response: agentResponse,
-            threadId: conversationThreadId,
-            language: preferredLang,
-            timestamp: new Date().toISOString()
-        });
+        END MASTRA INTEGRATION */
 
     } catch (error) {
         console.error('[Chat Controller] Error:', error.message);
