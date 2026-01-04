@@ -9,7 +9,8 @@ import {
   // diseaseWorkflow,
   // weatherWorkflow,
 } from "./agents/farmerAssistant.agent";
-import { loanWorkflow } from "./workflows/loan.workflow";
+import { loanWorkflow, loanApplicationWorkflow } from "./workflows/loan.workflow";
+import { loanEligibilityWorkflow } from "./workflows/loanEligibility.workflow";
 import { insuranceWorkflow } from "./workflows/insurance.workflow";
 import { weatherWorkflow } from "./workflows/weather.workflow";
 import { diseaseWorkflow } from "./workflows/disease.workflow";
@@ -17,7 +18,9 @@ export const mastra = new Mastra({
   workflows: {
     diseaseWorkflow,
     weatherWorkflow,
-    loanWorkflow,
+    loanWorkflow, // Full application workflow (for backward compatibility)
+    loanApplicationWorkflow, // Same as loanWorkflow
+    loanEligibilityWorkflow, // Check eligibility only
     insuranceWorkflow,
   },
   agents: {

@@ -35,15 +35,19 @@ const mapRoutes = require('./routes/mapRoutes');
 const cropRoutes = require('./routes/cropRoutes');
 const loanRoutes = require('./routes/loanRoutes');
 const insuranceRoutes = require('./routes/insuranceRoutes');
+const userRoutes = require('./routes/userRoutes');
+const mastraRoutes = require('./routes/mastraRoutes');
 
 // Mount routers
 app.use('/api/weather', weatherRoutes);
 app.use('/api/ai', aiRoutes);
+app.use('/api/mastra', mastraRoutes); // Mastra agent and workflows
 app.use('/api/maps', mapRoutes);
 app.use('/crop', cropRoutes); // Keeping paths consistent with frontend usage
 app.use('/loan', loanRoutes);
 app.use('/insurance', insuranceRoutes);
 app.use('/api/news', require('./routes/newsRoutes'));
+app.use('/api/user', userRoutes);
 
 // Basic route
 app.get('/', (req, res) => {

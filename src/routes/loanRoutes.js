@@ -8,6 +8,7 @@ router.post('/submitCropSelection', loanController.submitCropSelection);
 
 router.get('/getAll', loanController.getAllLoans);
 router.get('/user/:uid', loanController.getUserLoans);
+router.get('/predict-eligibility/:id', loanController.predictLoanEligibilityEndpoint);
 router.put('/updateStatus/:id', loanController.updateLoanStatus);
 router.delete('/delete/:id', loanController.deleteLoan);
 

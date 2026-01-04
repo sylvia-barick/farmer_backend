@@ -1,11 +1,11 @@
 import { createTool } from "@mastra/core";
 import { z } from "zod";
+import axios from "axios";
 
 export const loanEligibilityTool = createTool({
     id: "check-loan-eligibility-tool",
     description: "Calculate loan eligibility for farmers based on land size and crop type",
     inputSchema: z.object({
-        farmerUid: z.string().describe("Farmer's user ID"),
         farmerName: z.string().describe("Farmer's full name"),
         farmLocation: z.object({
             lat: z.coerce.number(),
@@ -25,17 +25,35 @@ export const loanEligibilityTool = createTool({
         fraudRiskScore: z.number().describe("Risk score 0-100"),
     }),
     execute: async ({ context }) => {
-        const { acres, requestedAmount, tenureMonths } = context;
+        const { acres, requestedAmount, tenureMonths, cropType, loanPurpose } = context;
 
         // Basic eligibility: minimum 1 acre
         const eligible = acres >= 1;
         const baseAmountPerAcre = 50_000;
 
-        // Calculate fraud risk (simplified version of controller logic)
-        let fraudScore = 10; // Base score
-        if (requestedAmount > 500000) fraudScore += 30;
-        if (tenureMonths < 6) fraudScore += 10;
-        fraudScore += Math.floor(Math.random() * 20);
+        // Calculate fraud risk based on realistic factors
+        let fraudScore = 15; // Base score
+        
+        // Factor 1: Loan-to-Land Ratio (25 points max)
+        if (requestedAmount > 0) {
+            const loanPerAcre = requestedAmount / acres;
+            if (loanPerAcre > 500000) fraudScore += 20; // Disproportionate request
+            else if (loanPerAcre > 300000) fraudScore += 10;
+            else if (loanPerAcre > 100000) fraudScore += 5;
+        }
+        
+        // Factor 2: Tenure Consistency (15 points max)
+        if (tenureMonths < 6) fraudScore += 10; // Too short
+        else if (tenureMonths > 84) fraudScore += 5; // Too long
+        
+        // Factor 3: Purpose Validation (20 points max)
+        const validPurposes = ['crop-cultivation', 'equipment-purchase', 'land-improvement'];
+        if (!validPurposes.includes(loanPurpose.toLowerCase())) {
+            fraudScore += 15;
+        }
+        
+        // Add slight randomization to simulate real-world variation
+        fraudScore += Math.floor(Math.random() * 10);
         fraudScore = Math.min(fraudScore, 100);
 
         const estimatedAmount = eligible
@@ -47,7 +65,7 @@ export const loanEligibilityTool = createTool({
             estimatedAmount,
             fraudRiskScore: fraudScore,
             reason: eligible
-                ? `You are eligible for a loan up to ₹${estimatedAmount.toLocaleString("en-IN")}. Fraud risk: ${fraudScore}/100`
+                ? `You are eligible for a loan up to ₹${estimatedAmount.toLocaleString("en-IN")}. Fraud risk assessment: ${fraudScore}/100 (${fraudScore < 30 ? 'Low Risk' : fraudScore < 60 ? 'Medium Risk' : 'High Risk'})`
                 : "Minimum land requirement is 1 acre for loan eligibility",
             requirements: eligible
                 ? [

@@ -25,8 +25,9 @@ export const dbTool = createTool({
             const endpointMap: Record<string, string> = {
                 "loanApplication": "/loan/apply",
                 "insuranceClaim": "/insurance/create",
+                "yieldPrediction": "/crop/addNewCrop",
                 "disease_reports": "/api/disease/report",
-                "crop_records": "/crop/add",
+                "crop_records": "/crop/addNewCrop",
             };
 
             const endpoint = endpointMap[collection];
@@ -35,27 +36,19 @@ export const dbTool = createTool({
                 throw new Error(`Unknown collection: ${collection}. Available: ${Object.keys(endpointMap).join(', ')}`);
             }
 
-            // Map fields if necessary (Example: user maps loanAmount -> requestedAmount)
-            let payload = { ...data };
-            if (collection === 'loanApplication') {
-                if (payload.loanAmount && !payload.requestedAmount) {
-                    payload.requestedAmount = payload.loanAmount;
-                }
-                if (payload.landSize && !payload.acres) {
-                    payload.acres = payload.landSize;
-                }
-                // Ensure required fields
-                payload.status = payload.status || 'PENDING';
-            }
+            console.log(`[dbTool] Saving to ${collection} at ${backendUrl}${endpoint}`);
+            console.log(`[dbTool] Data:`, JSON.stringify(data, null, 2));
 
-            const response = await axios.post(`${backendUrl}${endpoint}`, payload);
+            const response = await axios.post(`${backendUrl}${endpoint}`, data);
+
+            console.log(`[dbTool] Success! Response:`, response.data);
 
             return {
                 success: true,
                 id: response.data?.id || response.data?._id || "saved"
             };
         } catch (error: any) {
-            console.error("Database tool error:", error);
+            console.error("[dbTool] Database tool error:", error?.response?.data || error?.message || error);
 
             return {
                 success: false,

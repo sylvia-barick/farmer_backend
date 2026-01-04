@@ -7,6 +7,7 @@ const upload = multer(); // Basic memory storage
 router.post('/create', upload.any(), insuranceController.createClaim);
 router.get('/user/:uid', insuranceController.getClaimsByUser);
 router.get('/all', insuranceController.getAllClaims);
+router.get('/predict-eligibility/:id', insuranceController.predictInsuranceEligibilityEndpoint);
 router.put('/update/:id', insuranceController.updateClaimStatus);
 router.delete('/delete/:id', insuranceController.deleteClaim);
 

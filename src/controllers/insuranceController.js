@@ -1,5 +1,7 @@
 const groqService = require('../services/groqService');
 const InsuranceClaim = require('../models/insuranceModel');
+const { predictInsuranceEligibility } = require('../services/eligibilityService');
+const { calculateInsuranceFraudRisk } = require('../services/fraudDetectionService');
 
 const createClaim = async (req, res) => {
     try {
@@ -70,24 +72,78 @@ Provide your analysis in JSON format:
             };
         }
 
-        const newClaim = new InsuranceClaim({
-            userId: data.uid,
-            provider: data.provider,
+        // Prepare claim data with proper field mapping
+        const claimData = {
+            firebaseUid: data.firebaseUid || data.uid || data.userId,
+            provider: data.provider || 'Unknown Provider',
             uin: data.uin,
             policyNumber: data.policyNumber,
+            claimAmount: data.claimAmount ? Number(data.claimAmount) : 0,
             authenticityScore: aiValidation.authenticity_score,
             damageConfidence: aiValidation.damage_confidence,
             damagePrediction: aiValidation.damage_prediction,
-            status: aiValidation.recommendation || 'Under Review',
+            status: data.status || aiValidation.recommendation || 'Under Review',
             aiReasoning: aiValidation.reasoning
+        };
+
+        // Try to fetch user data if Firebase UID is provided (optional)
+        if (claimData.firebaseUid) {
+            try {
+                const User = require('../models/userModel');
+                const user = await User.findOne({ firebaseUid: claimData.firebaseUid });
+                if (user) {
+                    claimData.userId = user._id; // Store MongoDB ObjectId reference
+                    claimData.farmerName = user.name || 'Unknown Farmer'; // Store farmer name
+                }
+            } catch (userError) {
+                console.warn('[Insurance Controller] Could not fetch user data:', userError.message);
+                // Continue without user reference
+            }
+        }
+
+        // Predict eligibility based on claim characteristics
+        const eligibilityPrediction = await predictInsuranceEligibility({
+            claimAmount: claimData.claimAmount,
+            authenticityScore: claimData.authenticityScore,
+            damageConfidence: claimData.damageConfidence,
+            provider: claimData.provider
+        });
+
+        // Calculate fraud risk for insurance claim
+        const fraudAnalysis = await calculateInsuranceFraudRisk({
+            claimAmount: claimData.claimAmount,
+            authenticityScore: claimData.authenticityScore,
+            damageConfidence: claimData.damageConfidence,
+            provider: claimData.provider,
+            damagePrediction: claimData.damagePrediction
+        });
+
+        const newClaim = new InsuranceClaim({
+            ...claimData,
+            fraudRiskScore: fraudAnalysis.fraudRiskScore,
+            fraudReason: fraudAnalysis.reasoning,
+            fraudRiskLevel: fraudAnalysis.riskLevel,
+            eligibilityScore: eligibilityPrediction.eligibilityScore,
+            eligibilityReasoning: eligibilityPrediction.eligibilityReasoning,
+            predictedEligible: eligibilityPrediction.predictedEligible,
+            featureVector: eligibilityPrediction.featureVector
         });
 
         const savedClaim = await newClaim.save();
+
+        console.log('[Insurance Controller] Claim saved successfully:', savedClaim._id);
 
         res.json({
             success: true,
             result: aiValidation,
             claimRecord: savedClaim,
+            fraudRiskScore: fraudAnalysis.fraudRiskScore,
+            fraudRiskLevel: fraudAnalysis.riskLevel,
+            fraudReasoning: fraudAnalysis.reasoning,
+            requiresManualReview: fraudAnalysis.requiresManualReview,
+            eligibilityScore: eligibilityPrediction.eligibilityScore,
+            predictedEligible: eligibilityPrediction.predictedEligible,
+            eligibilityReasoning: eligibilityPrediction.eligibilityReasoning,
             message: "Claim analyzed and saved using Llama 4 Maverick VLM"
         });
     } catch (error) {
@@ -149,4 +205,52 @@ const updateClaimStatus = async (req, res) => {
     }
 };
 
-module.exports = { createClaim, getClaimsByUser, deleteClaim, getAllClaims, updateClaimStatus };
+const predictInsuranceEligibilityEndpoint = async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        // Fetch the claim
+        const claim = await InsuranceClaim.findById(id);
+        if (!claim) {
+            return res.status(404).json({ success: false, message: "Claim not found" });
+        }
+
+        // Predict eligibility
+        const prediction = await predictInsuranceEligibility({
+            claimAmount: claim.claimAmount,
+            authenticityScore: claim.authenticityScore,
+            damageConfidence: claim.damageConfidence,
+            provider: claim.provider
+        });
+
+        // Update the claim with prediction results
+        const updatedClaim = await InsuranceClaim.findByIdAndUpdate(
+            id,
+            {
+                eligibilityScore: prediction.eligibilityScore,
+                eligibilityReasoning: prediction.eligibilityReasoning,
+                predictedEligible: prediction.predictedEligible,
+                featureVector: prediction.featureVector
+            },
+            { new: true }
+        );
+
+        res.json({
+            success: true,
+            claim: updatedClaim,
+            prediction
+        });
+    } catch (error) {
+        console.error("Error predicting eligibility:", error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+module.exports = { 
+    createClaim, 
+    getClaimsByUser, 
+    deleteClaim, 
+    getAllClaims, 
+    updateClaimStatus,
+    predictInsuranceEligibilityEndpoint
+};

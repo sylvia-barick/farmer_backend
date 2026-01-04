@@ -1,89 +1,14 @@
 const LoanApplication = require('../models/loanModel');
-const ethers = require('ethers');
+const User = require('../models/userModel');
+const { predictLoanEligibility } = require('../services/eligibilityService');
+const { calculateLoanFraudRisk } = require('../services/fraudDetectionService');
 
-// --- Helper Functions (Mock) ---
+// --- Helper Functions ---
 
-const calculateFraudRisk = (data) => {
-    // Mock Logic: valid range 0-100 (0 = Safe, 100 = Fraud)
-    // Heuristics:
-    let score = 10; // Base
-    if (data.requestedAmount > 500000) score += 30;
-    if (data.tenureMonths < 6) score += 10;
-    score += Math.floor(Math.random() * 20); // Randomness
-    return Math.min(score, 100);
-};
-
-// Real Blockchain Config
-const PRIVATE_KEY = process.env.PRIVATE_KEY;
-const SHARDEUM_RPC = process.env.SHARDEUM_RPC || "https://liberty10.shardeum.org/";
-// Fallback contract address
-const CONTRACT_ADDRESS = "0x38a8d0328ad586CEE1f973CAfB5a01678d634578"; // From previous context
-
-const CONTRACT_ABI = [
-    "function registers(string name) payable",
-    "event Transfer(address indexed from, address indexed to, uint256 indexed tokenId)"
-];
-
-const generateMockTx = () => {
-    const chars = '0123456789abcdef';
-    let txHash = '0x';
-    let contractAddr = '0x';
-    for (let i = 0; i < 64; i++) txHash += chars[Math.floor(Math.random() * 16)];
-    for (let i = 0; i < 40; i++) contractAddr += chars[Math.floor(Math.random() * 16)];
-    const tokenId = Math.floor(1000 + Math.random() * 9000).toString(); // Mock Token ID
-    return { txHash, contractAddr, tokenId };
-};
-
-const generateBlockchainTx = async (loanId) => {
-    try {
-        console.log("Initiating Blockchain Transaction for Loan:", loanId);
-
-        // Setup Provider & Wallet
-        const provider = new ethers.providers.JsonRpcProvider(SHARDEUM_RPC);
-        const wallet = new ethers.Wallet(PRIVATE_KEY, provider);
-        const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, wallet);
-
-        // Generate unique name for NFT
-        const nftName = "loan-" + loanId.toString().slice(-5);
-        const price = ethers.utils.parseEther("30");
-
-        // Call Contract
-        const tx = await contract.registers(nftName, { value: price, gasLimit: 500000 });
-        console.log("Transaction Sent:", tx.hash);
-
-        // Wait for Receipt to get Token ID
-        const receipt = await tx.wait();
-
-        // Extract Token ID from Transfer event (standard ERC721)
-        // Topic 0: Transfer(address,address,uint256)
-        let tokenId = null;
-        if (receipt.logs) {
-            for (const log of receipt.logs) {
-                try {
-                    // We can manually parse if ABI issue, but let's try standard way
-                    // Transfer event signature hash: 0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef
-                    if (log.topics[0].toLowerCase() === '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef') {
-                        const idHex = log.topics[3];
-                        tokenId = ethers.BigNumber.from(idHex).toString();
-                    }
-                } catch (e) { console.log('Error parsing log', e); }
-            }
-        }
-
-        // If not found (or non-standard emit), use a fallback derived from hash
-        if (!tokenId) tokenId = parseInt(tx.hash.slice(-4), 16).toString(); // Fallback
-
-        return {
-            txHash: tx.hash,
-            contractAddr: CONTRACT_ADDRESS,
-            tokenId: tokenId
-        };
-
-    } catch (error) {
-        console.error("Blockchain Transaction Failed (Falling back to mock):", error.message);
-        // Fallback to mock so website keeps working
-        return generateMockTx();
-    }
+const calculateFraudRisk = async (data) => {
+    // Use enhanced fraud detection service
+    const fraudAnalysis = await calculateLoanFraudRisk(data);
+    return fraudAnalysis;
 };
 
 
@@ -92,18 +17,72 @@ const submitLoan = async (req, res) => {
         const data = req.body;
         console.log("Received Loan Application:", data);
 
-        // Calculate Fraud Risk
-        const fraudScore = calculateFraudRisk(data);
-        console.log(`Fraud Risk Score: ${fraudScore}`);
+        // Prepare loan data with proper field mapping
+        const loanData = {
+            firebaseUid: data.farmerUid || data.firebaseUid, // Accept both field names
+            cropType: data.cropType,
+            loanPurpose: data.loanPurpose,
+            requestedAmount: data.requestedAmount,
+            tenureMonths: data.tenureMonths,
+            acres: data.acres || data.landSize, // Use acres if provided, otherwise landSize
+            landSize: data.landSize || data.acres
+        };
+
+        // Try to fetch user data if Firebase UID is provided
+        if (loanData.firebaseUid) {
+            try {
+                const user = await User.findOne({ firebaseUid: loanData.firebaseUid });
+                if (user) {
+                    loanData.farmerUid = user._id; // Store MongoDB ObjectId reference
+                    loanData.farmerName = user.name || 'Unknown';
+                    loanData.acres = loanData.acres || user.landSizeAcres;
+                    loanData.landSize = loanData.landSize || user.landSizeAcres;
+                    if (user.location && user.location.latitude && user.location.longitude) {
+                        loanData.farmLocation = {
+                            lat: user.location.latitude,
+                            lng: user.location.longitude
+                        };
+                    }
+                }
+            } catch (userError) {
+                console.warn('Could not fetch user data:', userError.message);
+                // Continue without user data
+            }
+        }
+
+        // Set default values if still missing
+        if (!loanData.farmerName) {
+            loanData.farmerName = 'Farmer'; // Default fallback
+        }
+        if (!loanData.acres && !loanData.landSize) {
+            loanData.acres = 5; // Default fallback
+            loanData.landSize = 5;
+        }
+
+        // 1. Calculate Fraud Risk
+        const fraudAnalysis = await calculateFraudRisk(loanData);
+        console.log(`Fraud Risk Analysis:`, fraudAnalysis);
+
+        // 2. Predict Eligibility
+        const eligibilityPrediction = await predictLoanEligibility({
+            ...loanData,
+            fraudRiskScore: fraudAnalysis.fraudRiskScore
+        });
+        console.log('Eligibility Prediction:', eligibilityPrediction);
 
         const status = 'PENDING';
 
         const newLoan = new LoanApplication({
-            ...data,
-            fraudRiskScore: fraudScore,
-            status: status,
-            blockchainTxHash: null,
-            smartContractAddress: null
+            ...loanData,
+            fraudRiskScore: fraudAnalysis.fraudRiskScore,
+            fraudReason: fraudAnalysis.reasoning,
+            fraudRiskLevel: fraudAnalysis.riskLevel,
+            fraudRiskFactors: fraudAnalysis.riskFactors,
+            eligibilityScore: eligibilityPrediction.eligibilityScore,
+            eligibilityReasoning: eligibilityPrediction.eligibilityReasoning,
+            predictedEligible: eligibilityPrediction.predictedEligible,
+            featureVector: eligibilityPrediction.featureVector,
+            status: status
         });
 
         await newLoan.save();
@@ -115,7 +94,13 @@ const submitLoan = async (req, res) => {
             id: newLoan._id,
             message: "Loan submitted for admin review.",
             status: status,
-            fraudScore: fraudScore
+            fraudRiskScore: fraudAnalysis.fraudRiskScore,
+            fraudRiskLevel: fraudAnalysis.riskLevel,
+            fraudReasoning: fraudAnalysis.reasoning,
+            requiresManualReview: fraudAnalysis.requiresManualReview,
+            eligibilityScore: eligibilityPrediction.eligibilityScore,
+            predictedEligible: eligibilityPrediction.predictedEligible,
+            eligibilityReasoning: eligibilityPrediction.eligibilityReasoning
         });
     } catch (error) {
         console.error("Loan Controller Error:", error);
@@ -140,7 +125,23 @@ const getAllLoans = async (req, res) => {
 const getUserLoans = async (req, res) => {
     try {
         const { uid } = req.params;
-        const loans = await LoanApplication.find({ farmerUid: uid }).sort({ createdAt: -1 });
+        console.log(`[getUserLoans] Fetching loans for UID: ${uid}`);
+        
+        // Search by both firebaseUid and MongoDB ObjectId
+        const loans = await LoanApplication.find({
+            $or: [
+                { firebaseUid: uid },
+                { farmerUid: uid }
+            ]
+        }).sort({ createdAt: -1 });
+        
+        console.log(`[getUserLoans] Found ${loans.length} loans for UID: ${uid}`);
+        if (loans.length === 0) {
+            // Debug: Show what UIDs exist in DB
+            const sampleLoans = await LoanApplication.find({}).select('firebaseUid farmerUid').limit(5);
+            console.log('[getUserLoans] Sample UIDs in database:', sampleLoans.map(l => ({ firebaseUid: l.firebaseUid, farmerUid: l.farmerUid })));
+        }
+        
         res.json({ success: true, loans });
     } catch (error) {
         console.error("Error fetching user loans:", error);
@@ -156,16 +157,10 @@ const updateLoanStatus = async (req, res) => {
 
         if (status === 'APPROVED') {
             const existingLoan = await LoanApplication.findById(id);
-            // Always retry/generate if missing
             if (existingLoan) {
-                const txDetails = await generateBlockchainTx(id);
-                updateData.blockchainTxHash = txDetails.txHash;
-                updateData.smartContractAddress = txDetails.contractAddr;
-                updateData.tokenId = txDetails.tokenId;
-
                 // Disburse Amount Logic
                 updateData.disbursedAmount = existingLoan.requestedAmount;
-                console.log(`Loan Approved. Disbursed: ₹${existingLoan.requestedAmount} | Token ID: ${txDetails.tokenId}`);
+                console.log(`Loan Approved. Disbursed: ₹${existingLoan.requestedAmount}`);
             }
         }
 
@@ -196,4 +191,55 @@ const deleteLoan = async (req, res) => {
     }
 };
 
-module.exports = { submitLoan, submitCropSelection, getAllLoans, getUserLoans, updateLoanStatus, deleteLoan };
+const predictLoanEligibilityEndpoint = async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        // Fetch the loan
+        const loan = await LoanApplication.findById(id);
+        if (!loan) {
+            return res.status(404).json({ success: false, message: "Loan not found" });
+        }
+
+        // Predict eligibility
+        const prediction = await predictLoanEligibility({
+            requestedAmount: loan.requestedAmount,
+            tenureMonths: loan.tenureMonths,
+            acres: loan.acres || loan.landSize,
+            fraudRiskScore: loan.fraudRiskScore,
+            cropType: loan.cropType,
+            loanPurpose: loan.loanPurpose
+        });
+
+        // Update the loan with prediction results
+        const updatedLoan = await LoanApplication.findByIdAndUpdate(
+            id,
+            {
+                eligibilityScore: prediction.eligibilityScore,
+                eligibilityReasoning: prediction.eligibilityReasoning,
+                predictedEligible: prediction.predictedEligible,
+                featureVector: prediction.featureVector
+            },
+            { new: true }
+        );
+
+        res.json({
+            success: true,
+            loan: updatedLoan,
+            prediction
+        });
+    } catch (error) {
+        console.error("Error predicting eligibility:", error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+module.exports = { 
+    submitLoan, 
+    submitCropSelection, 
+    getAllLoans, 
+    getUserLoans, 
+    updateLoanStatus, 
+    deleteLoan,
+    predictLoanEligibilityEndpoint
+};

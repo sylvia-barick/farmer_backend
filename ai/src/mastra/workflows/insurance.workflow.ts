@@ -8,12 +8,17 @@ import { dbTool } from "../tools/db.tool";
 const getInsuranceGuidanceStep = createStep({
     id: "get-insurance-guidance",
     inputSchema: z.object({
+        // Can accept either disease data directly OR diseaseReportId
         disease: z.string().optional(),
         severity: z.enum(["low", "medium", "high"]).optional(),
         crop: z.string().optional(),
+        diseaseReportId: z.string().optional(),
+        // Form data
         provider: z.string(),
         uin: z.string().optional(),
         policyNumber: z.string().optional(),
+        // User ID for authentication
+        userId: z.string().optional(),
     }),
     outputSchema: z.object({
         guidance: insuranceGuideTool.outputSchema,
@@ -24,14 +29,20 @@ const getInsuranceGuidanceStep = createStep({
             disease: z.string().optional(),
             severity: z.string().optional(),
             crop: z.string().optional(),
+            userId: z.string().optional(),
         }),
     }),
     execute: async ({ inputData }) => {
+        // Use provided disease data or default for general claim
+        const disease = inputData.disease || "Crop Damage";
+        const severity = inputData.severity || "medium";
+        const crop = inputData.crop || "General";
+
         const guidance = await insuranceGuideTool.execute({
             context: {
-                disease: inputData.disease || "Unknown",
-                severity: inputData.severity || "medium",
-                crop: inputData.crop || "General Crop",
+                disease,
+                severity,
+                crop,
             },
         } as any);
 
@@ -41,9 +52,11 @@ const getInsuranceGuidanceStep = createStep({
                 provider: inputData.provider,
                 uin: inputData.uin,
                 policyNumber: inputData.policyNumber,
-                disease: inputData.disease,
-                severity: inputData.severity,
-                crop: inputData.crop,
+                disease,
+                severity,
+                crop,
+                diseaseReportId: inputData.diseaseReportId,
+                userId: inputData.userId,
             },
         };
     },
@@ -62,6 +75,8 @@ const createClaimStep = createStep({
             disease: z.string(),
             severity: z.string(),
             crop: z.string(),
+            diseaseReportId: z.string().optional(),
+            userId: z.string().optional(),
         }),
     }),
     outputSchema: z.object({
@@ -84,6 +99,7 @@ const createClaimStep = createStep({
             context: {
                 collection: "insuranceClaim",
                 data: {
+                    firebaseUid: claimData.userId || "", // Use actual userId if provided
                     provider: claimData.provider,
                     uin: claimData.uin || "",
                     policyNumber: claimData.policyNumber || "",
@@ -128,10 +144,17 @@ Your claim has been submitted and is under review.`,
 export const insuranceWorkflow = createWorkflow({
     id: "insurance-claim-workflow",
     inputSchema: z.object({
-        disease: z.string(),
-        severity: z.enum(["low", "medium", "high"]),
-        crop: z.string(),
-        provider: z.string().describe("Insurance provider name"),
+        // User authentication
+        userId: z.string().optional().describe("Firebase UID of authenticated user"),
+        
+        // Optional disease data (if coming from disease detection)
+        disease: z.string().optional(),
+        severity: z.enum(["low", "medium", "high"]).optional(),
+        crop: z.string().optional(),
+        diseaseReportId: z.string().optional(),
+        
+        // Form inputs (required)
+        provider: z.string().describe("Insurance provider: AIC, IFFCO Tokio, Bajaj Allianz, HDFC ERGO, Tata AIG"),
         uin: z.string().optional().describe("Universal Insurance Number"),
         policyNumber: z.string().optional().describe("Policy number"),
     }),

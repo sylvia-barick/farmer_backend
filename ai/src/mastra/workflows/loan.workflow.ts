@@ -2,28 +2,70 @@ import { createWorkflow, createStep } from "@mastra/core/workflows";
 import { z } from "zod";
 import { loanEligibilityTool } from "../tools/loanEligibility.tool";
 import { dbTool } from "../tools/db.tool";
+import { userDataTool } from "../tools/userData.tool";
 
-/* -------------------- Step 1: Check Eligibility -------------------- */
+/* -------------------- Step 0: Fetch User Data -------------------- */
+
+const fetchUserDataStep = createStep({
+    id: "fetch-user-data",
+    inputSchema: z.object({
+        userId: z.string(),
+        cropType: z.string(),
+        loanPurpose: z.string(),
+        requestedAmount: z.number(),
+        tenureYears: z.number(),
+    }),
+    outputSchema: z.object({
+        userData: userDataTool.outputSchema,
+        formData: z.object({
+            cropType: z.string(),
+            loanPurpose: z.string(),
+            requestedAmount: z.number(),
+            tenureMonths: z.number(),
+        }),
+        firebaseUid: z.string(),
+    }),
+    execute: async ({ inputData }) => {
+        const userData = await userDataTool.execute({
+            context: {
+                userId: inputData.userId,
+            },
+        } as any);
+
+        if (!userData.success) {
+            throw new Error(userData.error || "Failed to fetch user data");
+        }
+
+        return {
+            userData,
+            formData: {
+                cropType: inputData.cropType,
+                loanPurpose: inputData.loanPurpose,
+                requestedAmount: inputData.requestedAmount,
+                tenureMonths: inputData.tenureYears * 12, // Convert years to months
+            },
+            firebaseUid: inputData.userId, // Pass Firebase UID for backend
+        };
+    },
+});
 
 const checkEligibilityStep = createStep({
     id: "check-loan-eligibility",
     inputSchema: z.object({
-        farmerUid: z.string(),
-        farmerName: z.string(),
-        farmLocation: z.object({
-            lat: z.coerce.number(),
-            lng: z.coerce.number()
-        }).optional(),
-        cropType: z.string(),
-        acres: z.coerce.number().describe("Land size in acres"),
-        loanPurpose: z.string().describe("Purpose of the loan (e.g., seeds, equipment)"),
-        requestedAmount: z.coerce.number().describe("Amount requested by farmer"),
-        tenureMonths: z.coerce.number(),
+        userData: userDataTool.outputSchema,
+        formData: z.object({
+            cropType: z.string(),
+            loanPurpose: z.string(),
+            requestedAmount: z.number(),
+            tenureMonths: z.number(),
+        }),
+        firebaseUid: z.string(),
     }),
     outputSchema: z.object({
         eligibility: loanEligibilityTool.outputSchema,
         loanData: z.object({
-            farmerUid: z.string(),
+            firebaseUid: z.string(),
+            farmerUid: z.string().optional(),
             farmerName: z.string(),
             farmLocation: z.object({
                 lat: z.number(),
@@ -37,30 +79,31 @@ const checkEligibilityStep = createStep({
         }),
     }),
     execute: async ({ inputData }) => {
+        const { userData, formData, firebaseUid } = inputData;
+
         const eligibility = await loanEligibilityTool.execute({
             context: {
-                farmerUid: inputData.farmerUid,
-                farmerName: inputData.farmerName,
-                farmLocation: inputData.farmLocation,
-                cropType: inputData.cropType,
-                acres: inputData.acres,
-                loanPurpose: inputData.loanPurpose,
-                requestedAmount: inputData.requestedAmount,
-                tenureMonths: inputData.tenureMonths,
+                farmerName: userData.farmerName!,
+                farmLocation: userData.farmLocation,
+                cropType: formData.cropType,
+                acres: userData.acres!,
+                loanPurpose: formData.loanPurpose,
+                requestedAmount: formData.requestedAmount,
+                tenureMonths: formData.tenureMonths,
             },
         } as any);
 
         return {
             eligibility,
             loanData: {
-                farmerUid: inputData.farmerUid,
-                farmerName: inputData.farmerName,
-                farmLocation: inputData.farmLocation,
-                cropType: inputData.cropType,
-                acres: inputData.acres,
-                loanPurpose: inputData.loanPurpose,
-                requestedAmount: inputData.requestedAmount,
-                tenureMonths: inputData.tenureMonths,
+                firebaseUid: firebaseUid,
+                farmerName: userData.farmerName!,
+                farmLocation: userData.farmLocation,
+                cropType: formData.cropType,
+                acres: userData.acres!,
+                loanPurpose: formData.loanPurpose,
+                requestedAmount: formData.requestedAmount,
+                tenureMonths: formData.tenureMonths,
             },
         };
     },
@@ -73,7 +116,8 @@ const persistLoanApplicationStep = createStep({
     inputSchema: z.object({
         eligibility: loanEligibilityTool.outputSchema,
         loanData: z.object({
-            farmerUid: z.string(),
+            firebaseUid: z.string(),
+            farmerUid: z.string().optional(),
             farmerName: z.string(),
             farmLocation: z.object({
                 lat: z.number(),
@@ -106,7 +150,7 @@ const persistLoanApplicationStep = createStep({
             context: {
                 collection: "loanApplication",
                 data: {
-                    farmerUid: loanData.farmerUid,
+                    farmerUid: loanData.firebaseUid, // Use firebaseUid for database
                     farmerName: loanData.farmerName,
                     farmLocation: loanData.farmLocation,
                     cropType: loanData.cropType,
@@ -160,28 +204,33 @@ const formatResponseStep = createStep({
     },
 });
 
-/* -------------------- Workflow -------------------- */
+/* -------------------- Workflow: Apply for Loan (After Eligibility Check) -------------------- */
 
-export const loanWorkflow = createWorkflow({
-    id: "loan-eligibility-workflow",
+export const loanApplicationWorkflow = createWorkflow({
+    id: "loan-application-workflow",
     inputSchema: z.object({
-        farmerUid: z.string(),
-        farmerName: z.string(),
-        farmLocation: z.object({
-            lat: z.coerce.number(),
-            lng: z.coerce.number()
-        }).optional(),
-        cropType: z.string(),
-        acres: z.coerce.number(),
-        loanPurpose: z.string(),
-        requestedAmount: z.coerce.number(),
-        tenureMonths: z.coerce.number(),
+        // From Firebase Auth (frontend gets this from currentUser.uid)
+        userId: z.string().describe("Firebase UID of authenticated user"),
+        
+        // Loan-specific form inputs (user fills these in the form)
+        cropType: z.string().describe("Selected crop from dropdown"),
+        loanPurpose: z.string().describe("Purpose: Crop Cultivation, Equipment Purchase, Land Improvement, Livestock Purchase, Working Capital"),
+        requestedAmount: z.number().describe("Loan amount requested in INR"),
+        tenureYears: z.number().describe("Loan tenure in years: 1, 2, 3, 5, or 7"),
+        
+        // Note: farmerName, farmLocation, and acres are automatically fetched from backend via userDataTool
     }),
     outputSchema: z.object({
         message: z.string(),
+        loanId: z.string().optional(),
+        saved: z.boolean(),
     }),
 })
+    .then(fetchUserDataStep)
     .then(checkEligibilityStep)
     .then(persistLoanApplicationStep)
     .then(formatResponseStep)
     .commit();
+
+// Export both workflows
+export { loanApplicationWorkflow as loanWorkflow };

@@ -3,7 +3,12 @@ const mongoose = require('mongoose');
 const LoanApplicationSchema = new mongoose.Schema({
     farmerUid: {
         type: String, // Changed from ObjectId to String to match Frontend payload
-        required: true,
+        required: false,
+        index: true
+    },
+    firebaseUid: {
+        type: String,
+        required: false,
         index: true
     },
     farmerName: {
@@ -22,8 +27,11 @@ const LoanApplicationSchema = new mongoose.Schema({
     },
     acres: {
         type: Number,
-        required: false,
-        default: 5
+        required: false // Making optional, can be derived from landSize
+    },
+    landSize: {
+        type: Number,
+        required: false
     },
     loanPurpose: {
         type: String,
@@ -52,21 +60,40 @@ const LoanApplicationSchema = new mongoose.Schema({
         type: Number,
         default: 0
     },
-    blockchainTxHash: {
+    fraudReason: {
         type: String,
         default: null
     },
-    smartContractAddress: {
+    fraudRiskLevel: {
         type: String,
-        default: null
+        enum: ['LOW_RISK', 'MEDIUM_RISK', 'HIGH_RISK', 'EXTREME_RISK'],
+        default: 'LOW_RISK'
     },
-    tokenId: {
-        type: String,
+    fraudRiskFactors: {
+        type: Array,
         default: null
     },
     disbursedAmount: {
         type: Number,
         default: 0
+    },
+    // Eligibility prediction fields
+    eligibilityScore: {
+        type: Number,
+        default: null // 0-100 confidence score for eligibility
+    },
+    eligibilityReasoning: {
+        type: String,
+        default: null // Explanation for the eligibility decision
+    },
+    predictedEligible: {
+        type: Boolean,
+        default: null // true/false based on confidence threshold
+    },
+    // Vector embeddings for similarity-based prediction
+    featureVector: {
+        type: [Number],
+        default: null // Array of numeric features for ML prediction
     },
     createdAt: {
         type: Date,
