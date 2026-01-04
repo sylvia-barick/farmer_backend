@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: kisaansathi-backend
+    env: node
+    region: singapore  # Closest to India
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      # Add other env vars in Render dashboard (secrets)
