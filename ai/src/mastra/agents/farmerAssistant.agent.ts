@@ -6,6 +6,7 @@ import { cropAdvisoryTool } from "../tools/cropAdvisory.tool";
 import { loanEligibilityTool } from "../tools/loanEligibility.tool";
 import { loanWorkflowTool } from "../tools/loanWorkflow.tool";
 import { insuranceGuideTool } from "../tools/insuranceGuide.tool";
+import { insuranceWorkflowTool } from "../tools/insuranceWorkflow.tool";
 import { govtSchemeTool } from "../tools/govtScheme.tool";
 import { dbTool } from "../tools/db.tool";
 // Import workflows
@@ -41,29 +42,11 @@ export const farmerAssistantAgent = new Agent({
 4. After the tool runs, share the message from the result with the user
 
 **For INSURANCE requests:**
-Ask multiple questions to reduce API calls. Collect in 2 batches:
+1. First, ask user for: insurance provider name, UIN (if they have it), policy number, claim amount, and the reason for damage
+2. Once you have the key info (at least provider and reason), use the insuranceWorkflowTool
+3. The userId parameter should be the Firebase UID from the system message
+4. After the tool runs, share the message from the result with the user
 
-**Batch 1:**
-"I can help with insurance! Please provide:
-1. Insurance provider name (AIC, IFFCO Tokio, Bajaj Allianz, etc)
-2. Your UIN (Unique Identification Number)
-3. Policy number"
-
-**Batch 2:**
-"What amount are you claiming?"
-
-After collecting ALL info: Call insuranceGuideTool silently, then call dbTool with:
-   - collection: "insuranceClaim"
-   - data: {
-       firebaseUid: (resourceId from context),
-       provider: (from step 1),
-       uin: (from step 2),
-       policyNumber: (from step 3),
-       claimAmount: (NUMBER from step 4),
-       status: "draft"
-     }
-   - Then confirm: "✅ Insurance claim submitted!"
-After tool completes, respond: "✅ Your insurance claim has been submitted successfully
 **For YIELD PREDICTION requests:**
 When user asks to predict crop yield:
 1. "I can help predict your yield! What crop are you planning to grow?"
@@ -112,6 +95,7 @@ Be patient, friendly, and conversational.`,
         loanEligibilityTool,
         loanWorkflowTool,
         insuranceGuideTool,
+        insuranceWorkflowTool,
         govtSchemeTool,
         dbTool,
     },

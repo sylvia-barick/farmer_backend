@@ -37,11 +37,15 @@ const loanRoutes = require('./routes/loanRoutes');
 const insuranceRoutes = require('./routes/insuranceRoutes');
 const userRoutes = require('./routes/userRoutes');
 const mastraRoutes = require('./routes/mastraRoutes');
+const speechRoutes = require('./routes/speechRoutes');
+const ttsRoutes = require('./routes/ttsRoutes');
 
 // Mount routers
 app.use('/api/weather', weatherRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/mastra', mastraRoutes); // Mastra agent and workflows
+app.use('/api/speech', speechRoutes); // Whisper speech-to-text
+app.use('/api/tts', ttsRoutes); // ElevenLabs text-to-speech
 app.use('/api/maps', mapRoutes);
 app.use('/crop', cropRoutes); // Keeping paths consistent with frontend usage
 app.use('/loan', loanRoutes);
